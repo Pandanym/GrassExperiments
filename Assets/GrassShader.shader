@@ -61,13 +61,15 @@
                 const float2 corners[ID_PER_PRIMITIVE] = { float2(-0.5, -0.5), float2(-0.5, 0.5), float2(0.5, 0.5), float2(0.5, 0.5), float2(0.5, -0.5), float2(-0.5, -0.5) };
                 return corners[index % ID_PER_PRIMITIVE];
             #else
-                return float2((index >= 2 && index <= 4) ? 0.1 : -0.1, (index >= 1 && index <= 3) ? 1 : 0);
+                return float2((index >= 2 && index <= 4) ? 0.05 : -0.05, (index >= 1 && index <= 3) ? 1 : 0);
             #endif
             }
 
             struct GrassBlade
             {
                 float3 position;
+                float height;
+                float defaultHeight;
             };
 
             struct v2f
@@ -82,6 +84,7 @@
             float4 _MainTex_ST;
             fixed4 _BottomColor;
             fixed4 _TopColor;
+            float4 _PointerPos;
             
             uniform RWStructuredBuffer<GrassBlade> GrassBladeBuffer : register(u1);
 
@@ -95,10 +98,15 @@
                 // quad shape
                 float3 vertex = float3(GetCorner(vertexIndex), 0);
                 // taper the end of the grass blade
-                vertex.x *= (1-vertex.y) * .5;
+                vertex.x *= (1-vertex.y) + .2;
+                vertex.y *= GrassBladeBuffer[objectIndex].height;
 
                 // get blade position in buffer
                 float3 grassBladePosition = GrassBladeBuffer[objectIndex].position;
+
+                GrassBladeBuffer[objectIndex].height -= smoothstep(1.2, 1, distance(grassBladePosition, _PointerPos)) * unity_DeltaTime * 10;
+                GrassBladeBuffer[objectIndex].height += smoothstep(1, 1.2, distance(grassBladePosition, _PointerPos)) * unity_DeltaTime * .2;
+                GrassBladeBuffer[objectIndex].height = clamp(GrassBladeBuffer[objectIndex].height, .1, GrassBladeBuffer[objectIndex].defaultHeight);
 
                 // random rotate based on blade position
                 vertex = mul(AngleAxis3x3(rand(grassBladePosition) * UNITY_TWO_PI, float3(0, 1, 0)), vertex);
