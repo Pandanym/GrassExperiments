@@ -70,6 +70,8 @@
                 float3 position;
                 float height;
                 float defaultHeight;
+                float bend;
+                float3 direction;
             };
 
             struct v2f
@@ -85,6 +87,8 @@
             fixed4 _BottomColor;
             fixed4 _TopColor;
             float4 _PointerPos;
+            float4 _PointerDirection;
+            int _PointerActive;
             
             uniform RWStructuredBuffer<GrassBlade> GrassBladeBuffer : register(u1);
 
@@ -104,12 +108,20 @@
                 // get blade position in buffer
                 float3 grassBladePosition = GrassBladeBuffer[objectIndex].position;
 
-                GrassBladeBuffer[objectIndex].height -= smoothstep(1.2, 1, distance(grassBladePosition, _PointerPos)) * unity_DeltaTime * 10;
-                GrassBladeBuffer[objectIndex].height += smoothstep(1, 1.2, distance(grassBladePosition, _PointerPos)) * unity_DeltaTime * .2;
-                GrassBladeBuffer[objectIndex].height = clamp(GrassBladeBuffer[objectIndex].height, .1, GrassBladeBuffer[objectIndex].defaultHeight);
-
                 // random rotate based on blade position
                 vertex = mul(AngleAxis3x3(rand(grassBladePosition) * UNITY_TWO_PI, float3(0, 1, 0)), vertex);
+
+                if (distance(grassBladePosition, _PointerPos) <= 1.2 && _PointerActive > 0)
+                {
+                    GrassBladeBuffer[objectIndex].bend += smoothstep(1.2, 0, distance(grassBladePosition, _PointerPos)) * unity_DeltaTime * 20 * smoothstep(0,.2, length(_PointerDirection));
+                    GrassBladeBuffer[objectIndex].bend = clamp(GrassBladeBuffer[objectIndex].bend, 0, 1);
+
+                    GrassBladeBuffer[objectIndex].direction = lerp(GrassBladeBuffer[objectIndex].direction, normalize(_PointerDirection), 50 * unity_DeltaTime * (1 - GrassBladeBuffer[objectIndex].bend) * smoothstep(0, .2, length(_PointerDirection)) );
+                }                    
+                GrassBladeBuffer[objectIndex].bend -= smoothstep(1, 1.2, distance(grassBladePosition, _PointerPos)) * unity_DeltaTime * .3;
+                GrassBladeBuffer[objectIndex].bend = clamp(GrassBladeBuffer[objectIndex].bend, 0, 1);
+
+                vertex = mul(AngleAxis3x3(GrassBladeBuffer[objectIndex].bend * UNITY_TWO_PI *.25, cross(float3(0, 1, 0), GrassBladeBuffer[objectIndex].direction)), vertex);
 
                 vertex += grassBladePosition;
 

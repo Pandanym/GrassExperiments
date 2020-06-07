@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -37,10 +38,10 @@ public class GrassRenderer : MonoBehaviour
 
             position += new Vector3(Random.Range(-.1f, .1f), 0, Random.Range(-.1f, .1f)); // add random offset
 
-            grassBlade.Add(new GrassBlade(position, grassHeight + Random.Range(-.2f, .2f)));
+            grassBlade.Add(new GrassBlade(position, grassHeight + Random.Range(-.2f, .2f), 0, Vector3.zero));
         }
 
-        grassBladeBuffer = new ComputeBuffer(InstanceCount, sizeof(float) * 5); 
+        grassBladeBuffer = new ComputeBuffer(InstanceCount, Marshal.SizeOf(typeof(GrassBlade))); 
         Graphics.SetRandomWriteTarget(1, grassBladeBuffer);
         grassBladeBuffer.SetData(grassBlade);
 
@@ -53,6 +54,7 @@ public class GrassRenderer : MonoBehaviour
         grassBlade.Clear();
     }
 
+    Vector3 previousHitPoint;
     private void Update()
     {
         Plane plane = new Plane(Vector3.up, transform.position);
@@ -63,13 +65,25 @@ public class GrassRenderer : MonoBehaviour
         {
             Vector3 hitPoint = ray.GetPoint(distance);
 
+            if ((hitPoint - previousHitPoint).magnitude > 0f * Time.deltaTime) Shader.SetGlobalVector("_PointerDirection", (hitPoint - previousHitPoint));
+
+            previousHitPoint = hitPoint;
+
             Shader.SetGlobalVector("_PointerPos", hitPoint);
         }
+
+
+        Shader.SetGlobalInt("_PointerActive", Input.GetMouseButton(0) ? 1 : 0);
     }
 
     private void OnDestroy()
     {
         grassBladeBuffer.Release();
+        grassBladeBuffer.Dispose();
+        grassBladeBuffer = null;
+
+        if (!cam) return;
+
         cam.RemoveCommandBuffer(CameraEvent.AfterForwardOpaque, grassCommandBuffer);
     }
 }
@@ -79,11 +93,16 @@ public struct GrassBlade
     public Vector3 position;
     public float height;
     public float defaultHeight;
+    public float bend;
+    public Vector3 direction;
 
-    public GrassBlade(Vector3 position, float height)
+    public GrassBlade(Vector3 position, float height, float bend, Vector3 direction)
     {
         this.position = position;
         this.height = height;
         this.defaultHeight = height;
+        this.bend = bend;
+        this.direction = direction;
     }
+
 }
