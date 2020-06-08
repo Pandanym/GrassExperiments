@@ -12,9 +12,17 @@ public class GrassRenderer : MonoBehaviour
     public int grassPatchSize;
     public float grassHeight;
 
+    public float springForce;
+    public float springDamping;
+
+    public float bendForce;
+
     private List<GrassBlade> grassBlade = new List<GrassBlade>();
     private ComputeBuffer grassBladeBuffer;
-    private CommandBuffer grassCommandBuffer;
+    private CommandBuffer grassCameraCommandBuffer;
+    private CommandBuffer grassDepthCommandBuffer;
+    private CommandBuffer grassLightCommandBuffer;
+    private CommandBuffer setShadowTextureCommandBuffer;
 
     private int InstanceCount { get => (grassPatchSize* grassDensity) * (grassPatchSize * grassDensity); }
 
@@ -23,6 +31,7 @@ public class GrassRenderer : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
+
         cam = Camera.main;
 
         Debug.Log($"Number of grass blades : {InstanceCount}");
@@ -38,7 +47,7 @@ public class GrassRenderer : MonoBehaviour
 
             position += new Vector3(Random.Range(-.1f, .1f), 0, Random.Range(-.1f, .1f)); // add random offset
 
-            grassBlade.Add(new GrassBlade(position, grassHeight + Random.Range(-.2f, .2f), 0, Vector3.zero));
+            grassBlade.Add(new GrassBlade(position, grassHeight + Random.Range(-.2f, .2f), 0, Vector3.right));
         }
 
         grassBladeBuffer = new ComputeBuffer(InstanceCount, Marshal.SizeOf(typeof(GrassBlade))); 
@@ -47,9 +56,25 @@ public class GrassRenderer : MonoBehaviour
 
         Shader.SetGlobalBuffer("GrassBladeBuffer", grassBladeBuffer);
 
-        grassCommandBuffer = new CommandBuffer();
-        grassCommandBuffer.DrawProcedural(this.transform.localToWorldMatrix, grassMaterial, -1, MeshTopology.Triangles, 6 * InstanceCount, 1);
-        cam.AddCommandBuffer(UnityEngine.Rendering.CameraEvent.AfterForwardOpaque, grassCommandBuffer);
+        grassCameraCommandBuffer = new CommandBuffer();
+        grassCameraCommandBuffer.DrawProcedural(Matrix4x4.identity, grassMaterial, 0, MeshTopology.Triangles, 6 * InstanceCount, 1);
+        grassCameraCommandBuffer.name = "Grass Geometry Buffer";
+        cam.AddCommandBuffer(CameraEvent.BeforeForwardOpaque, grassCameraCommandBuffer);
+
+        grassDepthCommandBuffer = new CommandBuffer();
+        grassDepthCommandBuffer.DrawProcedural(Matrix4x4.identity, grassMaterial, 0, MeshTopology.Triangles, 6 * InstanceCount, 1);
+        grassDepthCommandBuffer.name = "Grass Depth Buffer";
+        cam.AddCommandBuffer(CameraEvent.BeforeDepthTexture, grassDepthCommandBuffer);
+
+        grassLightCommandBuffer = new CommandBuffer();
+        grassLightCommandBuffer.DrawProcedural(Matrix4x4.identity, grassMaterial, 0, MeshTopology.Triangles, 6 * InstanceCount, 1);
+        grassLightCommandBuffer.name = "Grass Shadows Caster Buffer";
+        FindObjectOfType<Light>().AddCommandBuffer(LightEvent.BeforeShadowMapPass, grassLightCommandBuffer);
+
+        setShadowTextureCommandBuffer = new CommandBuffer();
+        setShadowTextureCommandBuffer.name = "Get Shadow Texture Buffer";
+        setShadowTextureCommandBuffer.SetGlobalTexture("_ShadowTexture", BuiltinRenderTextureType.CurrentActive);
+        FindObjectOfType<Light>().AddCommandBuffer(LightEvent.AfterScreenspaceMask, setShadowTextureCommandBuffer);
 
         grassBlade.Clear();
     }
@@ -65,7 +90,8 @@ public class GrassRenderer : MonoBehaviour
         {
             Vector3 hitPoint = ray.GetPoint(distance);
 
-            if ((hitPoint - previousHitPoint).magnitude > 0f * Time.deltaTime) Shader.SetGlobalVector("_PointerDirection", (hitPoint - previousHitPoint));
+            if ((hitPoint - previousHitPoint).magnitude > 0) Shader.SetGlobalVector("_PointerDirection", (hitPoint - previousHitPoint));
+            else Shader.SetGlobalVector("_PointerDirection", Vector3.up);
 
             previousHitPoint = hitPoint;
 
@@ -74,6 +100,10 @@ public class GrassRenderer : MonoBehaviour
 
 
         Shader.SetGlobalInt("_PointerActive", Input.GetMouseButton(0) ? 1 : 0);
+
+        Shader.SetGlobalFloat("_GrassSpringForce", springForce);
+        Shader.SetGlobalFloat("_GrassSpringDamping", springDamping);
+        Shader.SetGlobalFloat("_GrassBendForce", bendForce);
     }
 
     private void OnDestroy()
@@ -84,7 +114,9 @@ public class GrassRenderer : MonoBehaviour
 
         if (!cam) return;
 
-        cam.RemoveCommandBuffer(CameraEvent.AfterForwardOpaque, grassCommandBuffer);
+        FindObjectOfType<Light>().RemoveAllCommandBuffers();
+
+        cam.RemoveAllCommandBuffers();
     }
 }
 
@@ -93,7 +125,8 @@ public struct GrassBlade
     public Vector3 position;
     public float height;
     public float defaultHeight;
-    public float bend;
+    public float bend; 
+    public float bendVelocity;
     public Vector3 direction;
 
     public GrassBlade(Vector3 position, float height, float bend, Vector3 direction)
@@ -103,6 +136,7 @@ public struct GrassBlade
         this.defaultHeight = height;
         this.bend = bend;
         this.direction = direction;
+        this.bendVelocity = 0;
     }
 
 }

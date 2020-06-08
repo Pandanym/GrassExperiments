@@ -7,10 +7,9 @@
     }
     SubShader
     {
-        Tags { "RenderType"="Opaque" }
+        Tags { "LightMode" = "ForwardBase" }
         LOD 100
         Cull Off
-        Lighting Off
         ZWrite On
         ZTest LEqual
 
@@ -20,10 +19,14 @@
             #pragma target 5.0
             #pragma vertex vert
             #pragma fragment frag
+
             // make fog work
             #pragma multi_compile_fog
 
+            // necessary for UNITY_TRANSFER_SHADOW and UNITY_SHADOW_COORDS
+            #define SHADOWS_SCREEN
             #include "UnityCG.cginc"
+            #include "AutoLight.cginc" 
 
             #define ID_PER_PRIMITIVE 6
 
@@ -55,15 +58,17 @@
                     );
             }
 
+            // Get the vertex position to form a quad based on the vertex index (0->5)
             float2 GetCorner(uint index)
             {
             #if 0
                 const float2 corners[ID_PER_PRIMITIVE] = { float2(-0.5, -0.5), float2(-0.5, 0.5), float2(0.5, 0.5), float2(0.5, 0.5), float2(0.5, -0.5), float2(-0.5, -0.5) };
                 return corners[index % ID_PER_PRIMITIVE];
             #else
-                return float2((index >= 2 && index <= 4) ? 0.05 : -0.05, (index >= 1 && index <= 3) ? 1 : 0);
+                return float2((index >= 2 && index <= 4) ? 1 : -1, (index >= 1 && index <= 3) ? 1 : 0);
             #endif
             }
+
 
             struct GrassBlade
             {
@@ -71,24 +76,30 @@
                 float height;
                 float defaultHeight;
                 float bend;
+                float bendVelocity;
                 float3 direction;
             };
 
             struct v2f
             {
-                float2 uv : TEXCOORD0;
+                float2 uv : TEXCOORD0; 
+                UNITY_SHADOW_COORDS(2)
                 UNITY_FOG_COORDS(1)
-                float4 vertex : POSITION;
+                float4 pos : POSITION;
                 fixed4 color : COL;
-            };
+            }; 
 
+            sampler2D _ShadowTexture;
             sampler2D _MainTex;
             float4 _MainTex_ST;
             fixed4 _BottomColor;
             fixed4 _TopColor;
-            float4 _PointerPos;
-            float4 _PointerDirection;
+            float3 _PointerPos;
+            float3 _PointerDirection;
             int _PointerActive;
+            float _GrassSpringForce;
+            float _GrassSpringDamping;
+            float _GrassBendForce;
             
             uniform RWStructuredBuffer<GrassBlade> GrassBladeBuffer : register(u1);
 
@@ -101,6 +112,10 @@
 
                 // quad shape
                 float3 vertex = float3(GetCorner(vertexIndex), 0);
+
+                o.uv = vertex.xy;
+
+                vertex.x *= .05;
                 // taper the end of the grass blade
                 vertex.x *= (1-vertex.y) + .2;
                 vertex.y *= GrassBladeBuffer[objectIndex].height;
@@ -111,15 +126,16 @@
                 // random rotate based on blade position
                 vertex = mul(AngleAxis3x3(rand(grassBladePosition) * UNITY_TWO_PI, float3(0, 1, 0)), vertex);
 
-                if (distance(grassBladePosition, _PointerPos) <= 1.2 && _PointerActive > 0)
-                {
-                    GrassBladeBuffer[objectIndex].bend += smoothstep(1.2, 0, distance(grassBladePosition, _PointerPos)) * unity_DeltaTime * 20 * smoothstep(0,.2, length(_PointerDirection));
-                    GrassBladeBuffer[objectIndex].bend = clamp(GrassBladeBuffer[objectIndex].bend, 0, 1);
+                float pointerDistanceMask = smoothstep(1.2, 0, distance(grassBladePosition, _PointerPos));
+                float pointerVelocityMask = smoothstep(0, .5, length(_PointerDirection.xz));
 
-                    GrassBladeBuffer[objectIndex].direction = lerp(GrassBladeBuffer[objectIndex].direction, normalize(_PointerDirection), 50 * unity_DeltaTime * (1 - GrassBladeBuffer[objectIndex].bend) * smoothstep(0, .2, length(_PointerDirection)) );
-                }                    
-                GrassBladeBuffer[objectIndex].bend -= smoothstep(1, 1.2, distance(grassBladePosition, _PointerPos)) * unity_DeltaTime * .3;
-                GrassBladeBuffer[objectIndex].bend = clamp(GrassBladeBuffer[objectIndex].bend, 0, 1);
+                GrassBladeBuffer[objectIndex].bendVelocity += (-(_GrassSpringForce * GrassBladeBuffer[objectIndex].bend) - (_GrassSpringDamping * GrassBladeBuffer[objectIndex].bendVelocity)) * unity_DeltaTime;
+                GrassBladeBuffer[objectIndex].bend += GrassBladeBuffer[objectIndex].bendVelocity * unity_DeltaTime;
+
+                GrassBladeBuffer[objectIndex].bend += pointerDistanceMask * _GrassBendForce * unity_DeltaTime * pointerVelocityMask * _PointerActive;
+                GrassBladeBuffer[objectIndex].bend = clamp(GrassBladeBuffer[objectIndex].bend, -1, 1);
+
+                GrassBladeBuffer[objectIndex].direction = lerp(GrassBladeBuffer[objectIndex].direction, lerp(GrassBladeBuffer[objectIndex].direction,normalize(_PointerDirection), pointerDistanceMask * _PointerActive), 50 * unity_DeltaTime * (1 - clamp(GrassBladeBuffer[objectIndex].bend, 0, 1)) * pointerVelocityMask);
 
                 vertex = mul(AngleAxis3x3(GrassBladeBuffer[objectIndex].bend * UNITY_TWO_PI *.25, cross(float3(0, 1, 0), GrassBladeBuffer[objectIndex].direction)), vertex);
 
@@ -128,18 +144,26 @@
                 // vertex color
                 o.color = lerp(_BottomColor, _TopColor, vertex.y);
 
-                o.vertex = UnityObjectToClipPos(float4(vertex,1));
+                o.pos = UnityObjectToClipPos(float4(vertex,1));
 
-                UNITY_TRANSFER_FOG(o,o.vertex);
+                UNITY_TRANSFER_SHADOW(o, o.uv)
+
+                UNITY_TRANSFER_FOG(o,o.pos);
                 return o;
             }
 
             fixed4 frag(v2f i) : SV_Target
-            {
+            { 
+                // sample shadowmap
+                float3 shadowCoord = i._ShadowCoord.xyz / i._ShadowCoord.w;
+                float shadowmap = tex2D(_ShadowTexture, shadowCoord.xy).r;
+
                 // sample the texture
-                fixed4 col = i.color;
+                fixed4 col = i.color * shadowmap;
+
                 // apply fog
                 UNITY_APPLY_FOG(i.fogCoord, col);
+
                 return col;
             }
             ENDCG
