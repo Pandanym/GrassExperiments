@@ -13,7 +13,7 @@ Material:
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
-  m_CustomRenderQueue: -1
+  m_CustomRenderQueue: 2000
   stringTagMap: {}
   disabledShaderPasses: []
   m_SavedProperties:
@@ -23,7 +23,13 @@ Material:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
-    m_Floats: []
+    - _WindDistortionMap:
+        m_Texture: {fileID: 2800000, guid: 84cc71cc9c8dfec4f8463b366b462170, type: 3}
+        m_Scale: {x: 0.01, y: 0.01}
+        m_Offset: {x: 0, y: 0}
+    m_Floats:
+    - _WindStrength: 0.35
     m_Colors:
     - _BottomColor: {r: 0.03137255, g: 0.30980393, b: 0.078431375, a: 1}
-    - _TopColor: {r: 0.37745818, g: 0.7169812, b: 0.10484158, a: 1}
+    - _TopColor: {r: 0.49830198, g: 0.7924528, b: 0.115877524, a: 1}
+    - _WindFrequency: {r: 0.05, g: 0.05, b: 0, a: 0}

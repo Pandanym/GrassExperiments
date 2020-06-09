@@ -57,16 +57,22 @@ public class GrassRenderer : MonoBehaviour
         Shader.SetGlobalBuffer("GrassBladeBuffer", grassBladeBuffer);
 
         grassCameraCommandBuffer = new CommandBuffer();
+        grassCameraCommandBuffer.SetGlobalInt("_Simulate", 0);
+        grassCameraCommandBuffer.SetGlobalInt("_ShadowCaster", 0);
         grassCameraCommandBuffer.DrawProcedural(Matrix4x4.identity, grassMaterial, 0, MeshTopology.Triangles, 6 * InstanceCount, 1);
         grassCameraCommandBuffer.name = "Grass Geometry Buffer";
         cam.AddCommandBuffer(CameraEvent.BeforeForwardOpaque, grassCameraCommandBuffer);
 
         grassDepthCommandBuffer = new CommandBuffer();
+        grassDepthCommandBuffer.SetGlobalInt("_Simulate", 1);
+        grassCameraCommandBuffer.SetGlobalInt("_ShadowCaster", 0);
         grassDepthCommandBuffer.DrawProcedural(Matrix4x4.identity, grassMaterial, 0, MeshTopology.Triangles, 6 * InstanceCount, 1);
         grassDepthCommandBuffer.name = "Grass Depth Buffer";
         cam.AddCommandBuffer(CameraEvent.BeforeDepthTexture, grassDepthCommandBuffer);
 
         grassLightCommandBuffer = new CommandBuffer();
+        grassLightCommandBuffer.SetGlobalInt("_Simulate", 0);
+        grassCameraCommandBuffer.SetGlobalInt("_ShadowCaster", 1);
         grassLightCommandBuffer.DrawProcedural(Matrix4x4.identity, grassMaterial, 0, MeshTopology.Triangles, 6 * InstanceCount, 1);
         grassLightCommandBuffer.name = "Grass Shadows Caster Buffer";
         FindObjectOfType<Light>().AddCommandBuffer(LightEvent.BeforeShadowMapPass, grassLightCommandBuffer);

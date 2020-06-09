@@ -148,7 +148,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 94356479}
   m_LocalRotation: {x: -1, y: -0, z: -0, w: 0.0000028312204}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: -0.3, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 1890246147}
@@ -359,6 +359,7 @@ GameObject:
   m_Component:
   - component: {fileID: 695985164}
   - component: {fileID: 695985163}
+  - component: {fileID: 695985165}
   m_Layer: 0
   m_Name: Directional Light
   m_TagString: Untagged
@@ -388,7 +389,7 @@ Light:
     m_Resolution: -1
     m_CustomResolution: -1
     m_Strength: 0.65
-    m_Bias: 0.05
+    m_Bias: 0.1
     m_NormalBias: 0.4
     m_NearPlane: 0.2
     m_CullingMatrixOverride:
@@ -434,13 +435,26 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 695985162}
-  m_LocalRotation: {x: 0.46577, y: 0.19193454, z: 0.24630025, w: 0.82798284}
+  m_LocalRotation: {x: 0.77920985, y: 0.61352396, z: -0.12810083, w: 0.0032581408}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 0}
   m_RootOrder: 4
-  m_LocalEulerAnglesHint: {x: 42.59, y: 48.019, z: 52.832}
+  m_LocalEulerAnglesHint: {x: 9.338, y: 551.436, z: -615.494}
+--- !u!114 &695985165
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 695985162}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 02278fcfcc3a60448ac0fd8819566475, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  speed: 50
 --- !u!1 &963194225
 GameObject:
   m_ObjectHideFlags: 0
@@ -517,13 +531,13 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 963194225}
-  m_LocalRotation: {x: 0.29062164, y: 0.35943165, z: -0.11887048, w: 0.8787593}
-  m_LocalPosition: {x: 2.24, y: 3.26, z: 2.43}
+  m_LocalRotation: {x: -0.12274596, y: -0.87644506, z: 0.30849943, w: -0.3487199}
+  m_LocalPosition: {x: 54.1, y: 3.5, z: 33.5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 0}
   m_RootOrder: 0
-  m_LocalEulerAnglesHint: {x: 36.600002, y: 44.491, z: 0}
+  m_LocalEulerAnglesHint: {x: 38.783, y: -223.39299, z: 0}
 --- !u!1 &1112106420
 GameObject:
   m_ObjectHideFlags: 0
@@ -568,12 +582,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   grassMaterial: {fileID: 2100000, guid: 0cbc06497e1a0c144b7240ac210e005b, type: 2}
-  grassDensity: 13
+  grassDensity: 10
   grassPatchSize: 100
   grassHeight: 1
-  springForce: 1
-  springDamping: 1
-  bendForce: 10
+  springForce: 80
+  springDamping: 8
+  bendForce: 18
 --- !u!1 &1890246143
 GameObject:
   m_ObjectHideFlags: 0

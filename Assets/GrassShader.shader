@@ -4,6 +4,9 @@
     {
         _BottomColor("BottomColor", Color) = (1,1,1,1)
         _TopColor("TopColor", Color) = (1,1,1,1)
+        _WindDistortionMap("Wind Distortion Map", 2D) = "white" {}
+        _WindFrequency("Wind Frequency", Vector) = (0.05, 0.05, 0, 0)
+        _WindStrength("Wind Strength", Float) = 1
     }
     SubShader
     {
@@ -89,6 +92,11 @@
                 fixed4 color : COL;
             }; 
 
+            sampler2D _WindDistortionMap;
+            float4 _WindDistortionMap_ST;
+            float2 _WindFrequency; 
+            float _WindStrength;
+
             sampler2D _ShadowTexture;
             sampler2D _MainTex;
             float4 _MainTex_ST;
@@ -100,6 +108,9 @@
             float _GrassSpringForce;
             float _GrassSpringDamping;
             float _GrassBendForce;
+            int _Simulate;
+            int _ShadowCaster;
+
             
             uniform RWStructuredBuffer<GrassBlade> GrassBladeBuffer : register(u1);
 
@@ -112,6 +123,7 @@
 
                 // quad shape
                 float3 vertex = float3(GetCorner(vertexIndex), 0);
+                float3 localVertex = vertex;
 
                 o.uv = vertex.xy;
 
@@ -129,15 +141,24 @@
                 float pointerDistanceMask = smoothstep(1.2, 0, distance(grassBladePosition, _PointerPos));
                 float pointerVelocityMask = smoothstep(0, .5, length(_PointerDirection.xz));
 
-                GrassBladeBuffer[objectIndex].bendVelocity += (-(_GrassSpringForce * GrassBladeBuffer[objectIndex].bend) - (_GrassSpringDamping * GrassBladeBuffer[objectIndex].bendVelocity)) * unity_DeltaTime;
-                GrassBladeBuffer[objectIndex].bend += GrassBladeBuffer[objectIndex].bendVelocity * unity_DeltaTime;
+                GrassBladeBuffer[objectIndex].bendVelocity += (-(_GrassSpringForce * GrassBladeBuffer[objectIndex].bend) - (_GrassSpringDamping * GrassBladeBuffer[objectIndex].bendVelocity)) * unity_DeltaTime * _Simulate;
+                GrassBladeBuffer[objectIndex].bend += GrassBladeBuffer[objectIndex].bendVelocity * unity_DeltaTime * _Simulate;
 
-                GrassBladeBuffer[objectIndex].bend += pointerDistanceMask * _GrassBendForce * unity_DeltaTime * pointerVelocityMask * _PointerActive;
+                GrassBladeBuffer[objectIndex].bend += _GrassBendForce * pointerDistanceMask * pointerVelocityMask * _PointerActive * unity_DeltaTime * _Simulate;
                 GrassBladeBuffer[objectIndex].bend = clamp(GrassBladeBuffer[objectIndex].bend, -1, 1);
 
-                GrassBladeBuffer[objectIndex].direction = lerp(GrassBladeBuffer[objectIndex].direction, lerp(GrassBladeBuffer[objectIndex].direction,normalize(_PointerDirection), pointerDistanceMask * _PointerActive), 50 * unity_DeltaTime * (1 - clamp(GrassBladeBuffer[objectIndex].bend, 0, 1)) * pointerVelocityMask);
+                GrassBladeBuffer[objectIndex].direction = lerp(GrassBladeBuffer[objectIndex].direction, lerp(GrassBladeBuffer[objectIndex].direction,normalize(_PointerDirection), pointerDistanceMask * _PointerActive * (1-_Simulate)), 50 * (1 - _Simulate) * unity_DeltaTime * (1 - clamp(GrassBladeBuffer[objectIndex].bend, 0, 1)) * pointerVelocityMask);
 
-                vertex = mul(AngleAxis3x3(GrassBladeBuffer[objectIndex].bend * UNITY_TWO_PI *.25, cross(float3(0, 1, 0), GrassBladeBuffer[objectIndex].direction)), vertex);
+                if (localVertex.y > 0) vertex = mul(AngleAxis3x3(GrassBladeBuffer[objectIndex].bend * UNITY_TWO_PI *.25, cross(float3(0, 1, 0), GrassBladeBuffer[objectIndex].direction)), vertex);
+
+                // wind
+                float2 windUV = grassBladePosition.xz * _WindDistortionMap_ST.xy + _WindDistortionMap_ST.zw + _WindFrequency * _Time.y;
+                float2 windSample = (tex2Dlod(_WindDistortionMap, float4(windUV, 0, 0)).xy * 2 - 1) * _WindStrength;
+                float3 windDirection = -normalize(float3(windSample.x, 0, windSample.y));
+
+                float3x3 windRotation = AngleAxis3x3(UNITY_PI * windSample, cross(float3(0,1,0),windDirection));
+
+                if (localVertex.y > 0) vertex = mul(windRotation, vertex);
 
                 vertex += grassBladePosition;
 
@@ -145,6 +166,8 @@
                 o.color = lerp(_BottomColor, _TopColor, vertex.y);
 
                 o.pos = UnityObjectToClipPos(float4(vertex,1));
+
+                o.pos = lerp(o.pos, UnityApplyLinearShadowBias(o.pos), _ShadowCaster);
 
                 UNITY_TRANSFER_SHADOW(o, o.uv)
 
@@ -156,7 +179,7 @@
             { 
                 // sample shadowmap
                 float3 shadowCoord = i._ShadowCoord.xyz / i._ShadowCoord.w;
-                float shadowmap = tex2D(_ShadowTexture, shadowCoord.xy).r;
+                float shadowmap = tex2D(_ShadowTexture, shadowCoord.xy).b;
 
                 // sample the texture
                 fixed4 col = i.color * shadowmap;
